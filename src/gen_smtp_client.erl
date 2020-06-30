@@ -87,7 +87,8 @@
 
 -type callback() :: fun( ({exit, any()} |
                           smtp_session_error() |
-                          {ok, binary()}) -> any() ).
+                          {ok, binary()} |
+                          {ok, binary(), any()}) -> any() ).
 
 %% Smth that is thrown from inner SMTP functions
 -type permanent_failure_reason() :: binary() |  % server's 5xx response
@@ -112,7 +113,9 @@
         {network_failure, smtp_host(), {error, timeout | inet:posix()}}.
 -type smtp_session_error() ::
         {error, no_more_hosts, {permanent_failure, smtp_host(), permanent_failure_reason()}} |
-        {error, retries_exceeded, host_failure()}.
+        {error, retries_exceeded, host_failure()} |
+        {error, no_more_hosts, {permanent_failure, smtp_host(), permanent_failure_reason()}, any()} |
+        {error, retries_exceeded, host_failure(), any()}.
 
 
 -spec send(Email :: email(), Options :: options()) -> {'ok', pid()} | {'error', validate_options_error()}.
@@ -178,12 +181,23 @@ send_blocking(Email, Options) ->
 send_it_nonblock(Email, Options, Callback) ->
 	case send_it(Email, Options) of
 		{error, Type, Message} when is_function(Callback) ->
-			Callback({error, Type, Message}),
+			
+			case proplists:get_value(app_data,Options, false) of 
+				false -> 
+					Callback({error, Type, Message});
+				AppData ->
+					Callback({error, Type, Message, AppData})
+			end,
 			{error, Type, Message};
 		{error, Type, Message} ->
 			erlang:exit({error, Type, Message});
 		Receipt when is_function(Callback) ->
-			Callback({ok, Receipt}),
+			case proplists:get_value(app_data,Options, false) of 
+				false -> 
+					Callback({ok, Receipt});
+				AppData ->
+					Callback({ok, Receipt, AppData})
+			end,
 			{ok, Receipt};
 		Receipt ->
 			{ok, Receipt}
