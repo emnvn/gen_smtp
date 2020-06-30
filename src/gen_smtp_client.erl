@@ -86,6 +86,7 @@
 -opaque smtp_client_socket() :: {smtp_socket:socket(), extensions(), options()}.
 
 -type callback() :: fun( ({exit, any()} |
+						  {exit, any(), any()} | 
                           smtp_session_error() |
                           {ok, binary()} |
                           {ok, binary(), any()}) -> any() ).
@@ -190,7 +191,13 @@ send_it_nonblock(Email, Options, Callback) ->
 			end,
 			{error, Type, Message};
 		{error, Type, Message} ->
-			erlang:exit({error, Type, Message});
+			case proplists:get_value(app_data,Options, false) of 
+				false -> 
+					erlang:exit({error, Type, Message});
+				AppData ->
+					erlang:exit({error, Type, Message, AppData})
+			end;
+			
 		Receipt when is_function(Callback) ->
 			case proplists:get_value(app_data,Options, false) of 
 				false -> 
